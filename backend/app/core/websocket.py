@@ -10,6 +10,7 @@ from datetime import datetime
 from app.services.websocket_service import WebSocketService
 
 router = APIRouter()
+websocket_router = router
 
 
 class ConnectionManager:

@@ -1,11 +1,25 @@
-import React from 'react';
-import { Bars3Icon, BellIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Bars3Icon, BellIcon, MagnifyingGlassIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
+import { useGetCurrentUserQuery } from '../../store/api/api';
 
 interface HeaderProps {
   onMenuClick: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
+  const navigate = useNavigate();
+  const { data: user } = useGetCurrentUserQuery(undefined, { skip: !localStorage.getItem('token') });
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/login');
+  };
+
+  const userInitial = user?.full_name?.[0]?.toUpperCase() || user?.username?.[0]?.toUpperCase() || 'U';
+  const displayName = user?.full_name || user?.username || 'User';
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
@@ -43,13 +57,42 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
           </button>
 
           {/* User menu */}
-          <div className="flex items-center space-x-3">
-            <div className="hidden md:block">
-              <p className="text-sm font-medium text-gray-700">Welcome back, User</p>
-            </div>
-            <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
-              <span className="text-sm font-medium text-white">U</span>
-            </div>
+          <div className="relative">
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="flex items-center space-x-3 focus:outline-none"
+            >
+              <div className="hidden md:block text-right">
+                <p className="text-sm font-medium text-gray-700">{displayName}</p>
+                <p className="text-xs text-gray-500">{user?.email}</p>
+              </div>
+              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                <span className="text-sm font-medium text-white">{userInitial}</span>
+              </div>
+            </button>
+
+            {/* Dropdown menu */}
+            {showUserMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowUserMenu(false)}
+                />
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
+                  <div className="px-4 py-2 border-b border-gray-200">
+                    <p className="text-sm font-medium text-gray-900">{displayName}</p>
+                    <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                  >
+                    <ArrowRightOnRectangleIcon className="w-4 h-4" />
+                    <span>Logout</span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -130,6 +130,43 @@ async def get_realtime_data(
     symbol: str,
     db: Session = Depends(get_db)
 ):
-    """Get real-time market data for a symbol"""
+    """Get real-time market data for a symbol from Yahoo Finance"""
     service = MarketDataService(db)
     return await service.get_realtime_data(symbol)
+
+
+@router.get("/fetch/{symbol}")
+async def fetch_yfinance_data(
+    symbol: str,
+    period: str = Query("1y", description="Period: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max"),
+    interval: str = Query("1d", description="Interval: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo"),
+    db: Session = Depends(get_db)
+):
+    """Fetch market data directly from Yahoo Finance"""
+    service = MarketDataService(db)
+    return await service.fetch_yfinance_data_direct(symbol, period, interval)
+
+
+@router.get("/search")
+async def search_instruments(
+    query: str = Query(..., description="Search query (symbol or name)"),
+    category: Optional[str] = Query(None, description="Category: stocks, etfs, crypto, forex, commodities"),
+    db: Session = Depends(get_db)
+):
+    """Search for instruments by symbol or name"""
+    service = MarketDataService(db)
+    return await service.search_instruments(query, category)
+
+
+@router.get("/categories")
+async def get_instrument_categories():
+    """Get available instrument categories"""
+    return {
+        "categories": [
+            {"id": "stocks", "name": "Stocks", "description": "Individual company stocks"},
+            {"id": "etfs", "name": "ETFs", "description": "Exchange Traded Funds"},
+            {"id": "crypto", "name": "Cryptocurrencies", "description": "Digital currencies"},
+            {"id": "forex", "name": "Forex", "description": "Foreign exchange pairs"},
+            {"id": "commodities", "name": "Commodities", "description": "Gold, oil, etc."}
+        ]
+    }

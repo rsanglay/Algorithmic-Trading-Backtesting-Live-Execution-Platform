@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { useCreateBacktestMutation, useGetStrategiesQuery } from '../../store/api/api';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import { Strategy } from '../../store/slices/strategiesSlice';
 
 interface CreateBacktestModalProps {
   isOpen: boolean;
@@ -65,7 +66,7 @@ const CreateBacktestModal: React.FC<CreateBacktestModalProps> = ({ isOpen, onClo
                     className="form-input"
                   >
                     <option value="">Select a strategy</option>
-                    {strategies?.map((strategy) => (
+                    {strategies?.map((strategy: Strategy) => (
                       <option key={strategy.id} value={strategy.id}>
                         {strategy.name}
                       </option>

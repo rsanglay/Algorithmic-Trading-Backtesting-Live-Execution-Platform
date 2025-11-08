@@ -3,6 +3,7 @@ import { useGetMLModelsQuery } from '../../store/api/api';
 import MLModelCard from '../../components/MLModels/MLModelCard';
 import CreateMLModelModal from '../../components/MLModels/CreateMLModelModal';
 import { PlusIcon } from '@heroicons/react/24/outline';
+import { MLModel } from '../../store/slices/mlModelsSlice';
 
 const MLModels: React.FC = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -44,7 +45,7 @@ const MLModels: React.FC = () => {
       {/* Models Grid */}
       {models && models.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {models.map((model) => (
+          {models.map((model: MLModel) => (
             <MLModelCard key={model.id} model={model} />
           ))}
         </div>

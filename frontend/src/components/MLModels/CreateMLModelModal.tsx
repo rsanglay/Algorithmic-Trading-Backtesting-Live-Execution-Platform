@@ -141,7 +141,7 @@ const CreateMLModelModal: React.FC<CreateMLModelModalProps> = ({ isOpen, onClose
                   <input
                     {...register('features', { 
                       required: 'Features are required',
-                      setValueAs: (value) => value.split(',').map(s => s.trim())
+                      setValueAs: (value) => value.split(',').map((s: string) => s.trim())
                     })}
                     className="form-input"
                     placeholder="feature1, feature2, feature3"

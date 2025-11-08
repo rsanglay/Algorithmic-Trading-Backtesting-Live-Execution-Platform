@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { useGetBacktestsQuery } from '../../store/api/api';
 import BacktestCard from '../../components/Backtesting/BacktestCard';
 import CreateBacktestModal from '../../components/Backtesting/CreateBacktestModal';
+import AdvancedBacktestingPanel from '../../components/AdvancedBacktesting/AdvancedBacktestingPanel';
 import { PlusIcon } from '@heroicons/react/24/outline';
+import { Backtest } from '../../store/slices/backtestingSlice';
 
 const Backtesting: React.FC = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -25,12 +27,12 @@ const Backtesting: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Backtesting</h1>
-          <p className="text-gray-600">Test your strategies against historical data</p>
+          <p className="text-gray-600">Test your strategies against historical data and validate robustness.</p>
         </div>
         <button
           onClick={() => setIsCreateModalOpen(true)}
@@ -41,10 +43,13 @@ const Backtesting: React.FC = () => {
         </button>
       </div>
 
+      {/* Advanced Backtesting */}
+      <AdvancedBacktestingPanel />
+
       {/* Backtests Grid */}
       {backtests && backtests.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {backtests.map((backtest) => (
+          {backtests.map((backtest: Backtest) => (
             <BacktestCard key={backtest.id} backtest={backtest} />
           ))}
         </div>

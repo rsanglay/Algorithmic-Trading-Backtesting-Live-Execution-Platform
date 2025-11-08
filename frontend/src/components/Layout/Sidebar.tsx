@@ -7,8 +7,10 @@ import {
   BeakerIcon,
   CpuChipIcon,
   ChartPieIcon,
-  DatabaseIcon,
-  XMarkIcon
+  CircleStackIcon,
+  XMarkIcon,
+  ShieldCheckIcon,
+  CubeIcon
 } from '@heroicons/react/24/outline';
 
 interface SidebarProps {
@@ -21,8 +23,10 @@ const navigation = [
   { name: 'Strategies', href: '/strategies', icon: ChartBarIcon },
   { name: 'Backtesting', href: '/backtesting', icon: BeakerIcon },
   { name: 'Analytics', href: '/analytics', icon: ChartPieIcon },
+  { name: 'Risk Management', href: '/risk-management', icon: ShieldCheckIcon },
+  { name: 'Factor Analysis', href: '/factor-analysis', icon: CubeIcon },
   { name: 'ML Models', href: '/ml-models', icon: CpuChipIcon },
-  { name: 'Market Data', href: '/market-data', icon: DatabaseIcon },
+  { name: 'Market Data', href: '/market-data', icon: CircleStackIcon },
   { name: 'Settings', href: '/settings', icon: CogIcon },
 ];
 

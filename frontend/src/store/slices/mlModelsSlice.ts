@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
-interface MLModel {
+export interface MLModel {
   id: string;
   name: string;
   model_type: string;

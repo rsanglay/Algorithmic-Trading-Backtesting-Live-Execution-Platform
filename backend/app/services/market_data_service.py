@@ -186,21 +186,144 @@ class MarketDataService:
         return df
     
     async def get_realtime_data(self, symbol: str) -> Dict[str, Any]:
-        """Get real-time market data for a symbol"""
-        # This would typically connect to a real-time data feed
-        # For now, return the latest available data
-        latest_data = self.db.query(MarketData).filter(
-            MarketData.symbol == symbol
-        ).order_by(desc(MarketData.timestamp)).first()
+        """Get real-time market data for a symbol from Yahoo Finance"""
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            
+            # Get current price data
+            current_data = ticker.history(period="1d", interval="1m")
+            
+            if current_data.empty:
+                # Fallback to latest daily data
+                current_data = ticker.history(period="5d", interval="1d")
+            
+            if current_data.empty:
+                return {"error": f"No data available for symbol {symbol}"}
+            
+            latest = current_data.iloc[-1]
+            previous_close = info.get('previousClose', latest['Close'])
+            
+            current_price = latest['Close']
+            change = current_price - previous_close
+            change_percent = (change / previous_close * 100) if previous_close else 0
+            
+            return {
+                "symbol": symbol,
+                "name": info.get('longName', symbol),
+                "price": float(current_price),
+                "previous_close": float(previous_close),
+                "change": float(change),
+                "change_percent": round(change_percent, 2),
+                "volume": int(latest['Volume']),
+                "high": float(latest['High']),
+                "low": float(latest['Low']),
+                "open": float(latest['Open']),
+                "market_cap": info.get('marketCap'),
+                "currency": info.get('currency', 'USD'),
+                "exchange": info.get('exchange', ''),
+                "sector": info.get('sector', ''),
+                "industry": info.get('industry', ''),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        except Exception as e:
+            return {"error": f"Error fetching data for {symbol}: {str(e)}"}
+    
+    async def fetch_yfinance_data_direct(
+        self, 
+        symbol: str, 
+        period: str = "1y", 
+        interval: str = "1d"
+    ) -> Dict[str, Any]:
+        """Fetch data directly from Yahoo Finance without storing in DB"""
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            
+            # Get historical data
+            hist = ticker.history(period=period, interval=interval)
+            
+            if hist.empty:
+                return {"error": f"No data available for symbol {symbol}"}
+            
+            # Convert to list of dictionaries
+            data = []
+            for idx, row in hist.iterrows():
+                data.append({
+                    "timestamp": idx.isoformat(),
+                    "open": float(row['Open']),
+                    "high": float(row['High']),
+                    "low": float(row['Low']),
+                    "close": float(row['Close']),
+                    "volume": int(row['Volume'])
+                })
+            
+            return {
+                "symbol": symbol,
+                "name": info.get('longName', symbol),
+                "exchange": info.get('exchange', ''),
+                "sector": info.get('sector', ''),
+                "industry": info.get('industry', ''),
+                "currency": info.get('currency', 'USD'),
+                "data": data,
+                "count": len(data)
+            }
+        except Exception as e:
+            return {"error": f"Error fetching data for {symbol}: {str(e)}"}
+    
+    async def search_instruments(self, query: str, category: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Search for instruments by name or symbol"""
+        # Yahoo Finance doesn't have a direct search API, so we'll use a predefined list
+        # In production, you might want to use a financial data provider API
         
-        if not latest_data:
-            return {"error": "No data available for symbol"}
-        
-        return {
-            "symbol": latest_data.symbol,
-            "timestamp": latest_data.timestamp,
-            "price": latest_data.close_price,
-            "volume": latest_data.volume,
-            "change": 0,  # Would calculate from previous close
-            "change_percent": 0
+        # Common instruments by category
+        categories = {
+            "stocks": ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "META", "NVDA", "JPM", "V", "JNJ"],
+            "etfs": ["SPY", "QQQ", "IWM", "GLD", "TLT", "VTI", "VOO", "DIA"],
+            "crypto": ["BTC-USD", "ETH-USD", "BNB-USD", "ADA-USD", "SOL-USD"],
+            "forex": ["EURUSD=X", "GBPUSD=X", "JPYUSD=X", "AUDUSD=X"],
+            "commodities": ["GC=F", "CL=F", "NG=F", "SI=F"]
         }
+        
+        results = []
+        search_lower = query.lower()
+        
+        # If category specified, search only in that category
+        if category and category in categories:
+            symbols = categories[category]
+        else:
+            # Search all categories
+            symbols = []
+            for cat_symbols in categories.values():
+                symbols.extend(cat_symbols)
+        
+        # Filter symbols that match query
+        matching_symbols = [s for s in symbols if search_lower in s.lower()]
+        
+        # Fetch info for matching symbols
+        for symbol in matching_symbols[:20]:  # Limit to 20 results
+            try:
+                ticker = yf.Ticker(symbol)
+                info = ticker.info
+                results.append({
+                    "symbol": symbol,
+                    "name": info.get('longName', symbol),
+                    "exchange": info.get('exchange', ''),
+                    "sector": info.get('sector', ''),
+                    "category": category or self._get_category(symbol, categories)
+                })
+            except:
+                results.append({
+                    "symbol": symbol,
+                    "name": symbol,
+                    "category": category or self._get_category(symbol, categories)
+                })
+        
+        return results
+    
+    def _get_category(self, symbol: str, categories: Dict[str, List[str]]) -> str:
+        """Determine category for a symbol"""
+        for category, symbols in categories.items():
+            if symbol in symbols:
+                return category
+        return "stocks"

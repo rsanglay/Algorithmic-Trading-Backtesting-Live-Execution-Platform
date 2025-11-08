@@ -3,6 +3,7 @@ import { useGetStrategiesQuery } from '../../store/api/api';
 import StrategyCard from '../../components/Strategies/StrategyCard';
 import CreateStrategyModal from '../../components/Strategies/CreateStrategyModal';
 import { PlusIcon } from '@heroicons/react/24/outline';
+import { Strategy } from '../../store/slices/strategiesSlice';
 
 const Strategies: React.FC = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -44,7 +45,7 @@ const Strategies: React.FC = () => {
       {/* Strategies Grid */}
       {strategies && strategies.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {strategies.map((strategy) => (
+          {strategies.map((strategy: Strategy) => (
             <StrategyCard key={strategy.id} strategy={strategy} />
           ))}
         </div>

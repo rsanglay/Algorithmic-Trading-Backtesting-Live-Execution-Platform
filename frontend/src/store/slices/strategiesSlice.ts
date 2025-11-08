@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
-interface Strategy {
+export interface Strategy {
   id: string;
   name: string;
   description: string;

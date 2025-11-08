@@ -4,6 +4,7 @@ import PerformanceMetrics from '../../components/Analytics/PerformanceMetrics';
 import RiskMetrics from '../../components/Analytics/RiskMetrics';
 import CorrelationMatrix from '../../components/Analytics/CorrelationMatrix';
 import VolatilityAnalysis from '../../components/Analytics/VolatilityAnalysis';
+import { Strategy } from '../../store/slices/strategiesSlice';
 
 const Analytics: React.FC = () => {
   const { data: strategies, isLoading } = useGetStrategiesQuery({});
@@ -51,13 +52,13 @@ const Analytics: React.FC = () => {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-500">Active Strategies</span>
                 <span className="text-sm font-medium text-gray-900">
-                  {strategies?.filter(s => s.is_active).length || 0}
+                  {strategies?.filter((s: Strategy) => s.is_active).length || 0}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-500">Live Strategies</span>
                 <span className="text-sm font-medium text-gray-900">
-                  {strategies?.filter(s => s.is_live).length || 0}
+                  {strategies?.filter((s: Strategy) => s.is_live).length || 0}
                 </span>
               </div>
             </div>

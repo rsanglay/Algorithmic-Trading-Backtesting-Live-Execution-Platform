@@ -46,15 +46,57 @@ A comprehensive algorithmic trading platform that enables quantitative researche
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-## 🚀 Quick Start
+## 🚀 Quick Start with Docker
 
 ### Prerequisites
-- Docker and Docker Compose
-- Python 3.11+
-- Node.js 18+
-- PostgreSQL 15+
+- **Docker Desktop** installed and running
+  - [Download for Windows/Mac](https://www.docker.com/products/docker-desktop)
+  - [Install for Linux](https://docs.docker.com/engine/install/)
 
-### Installation
+### 🎯 Fastest Way to Run
+
+#### Option 1: Using Startup Scripts (Recommended)
+
+**Linux/Mac:**
+```bash
+chmod +x start.sh stop.sh
+./start.sh
+```
+
+**Windows:**
+```cmd
+start.bat
+```
+
+#### Option 2: Using Docker Compose
+
+```bash
+# Start all services (frontend + backend)
+docker-compose -f docker-compose.dev.yml up --build -d
+
+# View logs
+docker-compose -f docker-compose.dev.yml logs -f
+
+# Stop services
+docker-compose -f docker-compose.dev.yml down
+```
+
+### 📍 Access the Application
+
+Once containers are running:
+
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **API Documentation**: http://localhost:8000/docs
+- **Health Check**: http://localhost:8000/health
+
+### 📚 Detailed Docker Setup
+
+See [DOCKER_SETUP.md](./DOCKER_SETUP.md) for comprehensive Docker documentation.
+
+### 🔧 Manual Installation (Without Docker)
+
+If you prefer to run without Docker:
 
 1. **Clone the repository**
 ```bash
@@ -68,16 +110,19 @@ cp env.example .env
 # Edit .env with your configuration
 ```
 
-3. **Start the application**
+3. **Backend Setup**
 ```bash
-docker-compose up -d
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload
 ```
 
-4. **Access the application**
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Documentation: http://localhost:8000/docs
-- Grafana: http://localhost:3001 (admin/admin)
+4. **Frontend Setup**
+```bash
+cd frontend
+npm install
+npm start
+```
 
 ### Development Setup
 

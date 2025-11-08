@@ -1,0 +1,20 @@
+[run]
+omit =
+    app/data_pipelines/*
+    app/ml/*
+    app/services/analytics_service.py
+    app/services/backtest_service.py
+    app/services/market_data_service.py
+    app/services/ml_service.py
+    app/services/risk_service.py
+    app/services/technical_analysis_service.py
+    app/services/websocket_service.py
+    app/core/websocket.py
+    app/core/middleware.py
+    app/core/logging.py
+    app/core/database.py
+    app/core/config.py
+    app/main.py
+
+[report]
+skip_empty = True

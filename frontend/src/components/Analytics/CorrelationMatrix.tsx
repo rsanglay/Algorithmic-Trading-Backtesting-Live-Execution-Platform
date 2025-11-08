@@ -76,7 +76,7 @@ const CorrelationMatrix: React.FC = () => {
           </div>
           <div className="flex items-center space-x-1">
             <div className="w-3 h-3 bg-gray-100 rounded"></div>
-            <span className="text-xs text-gray-500">Minimal (<0.2)</span>
+            <span className="text-xs text-gray-500">Minimal ({'<0.2'})</span>
           </div>
         </div>
 

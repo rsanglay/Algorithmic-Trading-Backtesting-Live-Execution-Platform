@@ -23,8 +23,38 @@ export const api = createApi({
     'Analytics',
     'Position',
     'Order',
+    'User',
   ],
   endpoints: (builder) => ({
+    // Authentication
+    register: builder.mutation({
+      query: (userData) => ({
+        url: '/auth/register',
+        method: 'POST',
+        body: userData,
+      }),
+    }),
+    login: builder.mutation({
+      query: (credentials) => ({
+        url: '/auth/login',
+        method: 'POST',
+        body: credentials,
+      }),
+    }),
+    getCurrentUser: builder.query({
+      query: () => ({
+        url: '/auth/me',
+      }),
+      providesTags: ['User'],
+    }),
+    updateUserPreferences: builder.mutation({
+      query: (preferences) => ({
+        url: '/auth/me/preferences',
+        method: 'PUT',
+        body: preferences,
+      }),
+      invalidatesTags: ['User'],
+    }),
     // Strategies
     getStrategies: builder.query({
       query: (params = {}) => ({
@@ -51,6 +81,8 @@ export const api = createApi({
         method: 'PUT',
         body: strategy,
       }),
+      invalidatesTags: ['Strategy'],
+    }),
     deleteStrategy: builder.mutation({
       query: (id) => ({
         url: `/strategies/${id}`,
@@ -181,6 +213,121 @@ export const api = createApi({
       }),
       invalidatesTags: ['MarketData'],
     }),
+    fetchYFinanceData: builder.query({
+      query: ({ symbol, period = '1y', interval = '1d' }) => ({
+        url: `/market-data/fetch/${symbol}`,
+        params: { period, interval },
+      }),
+      providesTags: ['MarketData'],
+    }),
+    getRealtimeData: builder.query({
+      query: (symbol) => ({
+        url: `/market-data/realtime/${symbol}`,
+      }),
+      providesTags: ['MarketData'],
+    }),
+    searchInstruments: builder.query({
+      query: ({ query, category }) => ({
+        url: '/market-data/search',
+        params: { query, category },
+      }),
+    }),
+    getInstrumentCategories: builder.query({
+      query: () => ({
+        url: '/market-data/categories',
+      }),
+    }),
+
+    // Advanced Backtesting
+    runWalkForwardAnalysis: builder.mutation({
+      query: ({ strategyId, trainPeriod, testPeriod, step }) => ({
+        url: '/advanced-backtesting/walk-forward',
+        method: 'POST',
+        params: { strategy_id: strategyId, train_period: trainPeriod, test_period: testPeriod, step },
+      }),
+    }),
+    runMonteCarloSimulation: builder.mutation({
+      query: ({ strategyId, nSimulations, nPeriods, confidenceLevel }) => ({
+        url: '/advanced-backtesting/monte-carlo',
+        method: 'POST',
+        params: { strategy_id: strategyId, n_simulations: nSimulations, n_periods: nPeriods, confidence_level: confidenceLevel },
+      }),
+    }),
+    getAdvancedMetrics: builder.query({
+      query: (backtestId) => ({
+        url: `/advanced-backtesting/metrics/${backtestId}`,
+      }),
+    }),
+
+    // Factor Analysis
+    getFamaFrench3Factor: builder.query({
+      query: ({ portfolioId, startDate, endDate }) => ({
+        url: '/factors/fama-french-3',
+        params: { portfolio_id: portfolioId, start_date: startDate, end_date: endDate },
+      }),
+    }),
+    getFamaFrench5Factor: builder.query({
+      query: ({ portfolioId, startDate, endDate }) => ({
+        url: '/factors/fama-french-5',
+        params: { portfolio_id: portfolioId, start_date: startDate, end_date: endDate },
+      }),
+    }),
+    getFactorExposure: builder.query({
+      query: (portfolioId) => ({
+        url: '/factors/exposure',
+        params: { portfolio_id: portfolioId },
+      }),
+    }),
+    getFactorAttribution: builder.query({
+      query: ({ portfolioId, startDate, endDate }) => ({
+        url: '/factors/attribution',
+        params: { portfolio_id: portfolioId, start_date: startDate, end_date: endDate },
+      }),
+    }),
+    getFactorCorrelation: builder.query({
+      query: () => ({
+        url: '/factors/correlation',
+      }),
+    }),
+
+    // Risk Metrics (New)
+    getRiskVar: builder.query({
+      query: ({ strategyId, confidenceLevel, method }) => ({
+        url: `/risk/var/${strategyId}`,
+        params: { confidence_level: confidenceLevel, method },
+      }),
+    }),
+    getRiskCvar: builder.query({
+      query: ({ strategyId, confidenceLevel }) => ({
+        url: `/risk/cvar/${strategyId}`,
+        params: { confidence_level: confidenceLevel },
+      }),
+    }),
+    getComprehensiveRiskMetrics: builder.query({
+      query: ({ strategyId, startDate, endDate }) => ({
+        url: `/risk/metrics/${strategyId}`,
+        params: { start_date: startDate, end_date: endDate },
+      }),
+    }),
+    runRiskStressTest: builder.mutation({
+      query: ({ strategyId, scenario }) => ({
+        url: `/risk/stress-test/${strategyId}`,
+        method: 'GET',
+        params: { scenario },
+      }),
+    }),
+
+    // Strategy Templates
+    getStrategyTemplates: builder.query({
+      query: () => ({
+        url: '/strategy-templates',
+      }),
+    }),
+    getStrategyTemplate: builder.query({
+      query: (templateId) => ({
+        url: `/strategy-templates/${templateId}`,
+      }),
+    }),
 
     // Analytics
     getStrategyPerformance: builder.query({
@@ -260,6 +407,12 @@ export const api = createApi({
 });
 
 export const {
+  // Auth
+  useRegisterMutation,
+  useLoginMutation,
+  useGetCurrentUserQuery,
+  useUpdateUserPreferencesMutation,
+
   // Strategies
   useGetStrategiesQuery,
   useGetStrategyQuery,
@@ -289,6 +442,32 @@ export const {
   useGetNewsDataQuery,
   useGetTechnicalIndicatorsQuery,
   useSyncMarketDataMutation,
+  useFetchYFinanceDataQuery,
+  useGetRealtimeDataQuery,
+  useSearchInstrumentsQuery,
+  useGetInstrumentCategoriesQuery,
+
+  // Advanced Backtesting
+  useRunWalkForwardAnalysisMutation,
+  useRunMonteCarloSimulationMutation,
+  useGetAdvancedMetricsQuery,
+
+  // Factor Analysis
+  useGetFamaFrench3FactorQuery,
+  useGetFamaFrench5FactorQuery,
+  useGetFactorExposureQuery,
+  useGetFactorAttributionQuery,
+  useGetFactorCorrelationQuery,
+
+  // Risk Metrics (New)
+  useGetRiskVarQuery,
+  useGetRiskCvarQuery,
+  useGetComprehensiveRiskMetricsQuery,
+  useRunRiskStressTestMutation,
+
+  // Strategy Templates
+  useGetStrategyTemplatesQuery,
+  useGetStrategyTemplateQuery,
 
   // Analytics
   useGetStrategyPerformanceQuery,

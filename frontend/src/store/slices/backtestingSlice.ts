@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
-interface Backtest {
+export interface Backtest {
   id: string;
   strategy_id: string;
   name: string;

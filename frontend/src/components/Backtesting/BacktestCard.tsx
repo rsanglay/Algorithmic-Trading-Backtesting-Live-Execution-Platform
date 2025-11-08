@@ -4,8 +4,8 @@ import {
   ChartBarIcon, 
   ClockIcon, 
   CurrencyDollarIcon,
-  TrendingUpIcon,
-  TrendingDownIcon
+  ArrowTrendingUpIcon,
+  ArrowTrendingDownIcon
 } from '@heroicons/react/24/outline';
 
 interface Backtest {
