@@ -14,6 +14,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
     navigate('/login');
   };

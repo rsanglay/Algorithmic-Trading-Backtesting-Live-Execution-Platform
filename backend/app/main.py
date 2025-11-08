@@ -29,6 +29,7 @@ from app.core.middleware import (
 )
 from app.api.v1.api import api_router
 from app.core.websocket import websocket_router
+from app.instrumentation import metrics_router, MetricsMiddleware
 
 # Setup logging
 setup_logging()
@@ -68,6 +69,7 @@ app.add_middleware(LoggingMiddleware)
 app.add_middleware(ErrorHandlingMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitMiddleware, requests_per_minute=60)
+app.add_middleware(MetricsMiddleware)
 
 # CORS middleware
 app.add_middleware(
@@ -129,6 +131,7 @@ security = HTTPBearer()
 # Include routers
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(websocket_router, prefix="/ws")
+app.include_router(metrics_router)
 
 
 @app.get("/")

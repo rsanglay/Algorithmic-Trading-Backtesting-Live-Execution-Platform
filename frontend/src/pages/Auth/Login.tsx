@@ -17,8 +17,8 @@ const Login: React.FC = () => {
     try {
       const result = await login(formData).unwrap();
       
-      // Store token
       localStorage.setItem('token', result.access_token);
+      localStorage.setItem('refreshToken', result.refresh_token);
       localStorage.setItem('user', JSON.stringify(result.user));
       
       toast.success('Login successful!');

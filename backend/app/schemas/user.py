@@ -58,8 +58,13 @@ class User(UserBase):
 class Token(BaseModel):
     """Token response schema"""
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user: User
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 
 class TokenData(BaseModel):

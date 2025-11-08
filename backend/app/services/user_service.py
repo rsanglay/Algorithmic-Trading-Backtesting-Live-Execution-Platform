@@ -7,11 +7,20 @@ from typing import Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime
 import uuid
+import re
 
 from app.models.user import User
-from app.schemas.user import UserCreate, UserUpdate, UserPreferencesUpdate
-from app.core.auth import get_password_hash, verify_password, create_access_token
+from app.schemas.user import UserCreate, UserUpdate, UserPreferencesUpdate, Token
+from app.core.auth import get_password_hash, verify_password, create_access_token, create_refresh_token
 from app.core.exceptions import NotFoundError, BadRequestError
+from app.core.config import settings
+
+PASSWORD_POLICY_REGEXES = {
+    "upper": re.compile(r"[A-Z]"),
+    "lower": re.compile(r"[a-z]"),
+    "digit": re.compile(r"\d"),
+    "special": re.compile(r"[!@#$%^&*(),.?\"{}|<>]"),
+}
 
 
 class UserService:
@@ -19,6 +28,18 @@ class UserService:
     
     def __init__(self, db: Session):
         self.db = db
+
+    def _validate_password(self, password: str) -> None:
+        if len(password) > settings.PASSWORD_MAX_LENGTH:
+            raise BadRequestError("Password exceeds maximum supported length of 72 characters")
+        if settings.PASSWORD_REQUIRE_UPPERCASE and not PASSWORD_POLICY_REGEXES["upper"].search(password):
+            raise BadRequestError("Password must contain at least one uppercase letter")
+        if settings.PASSWORD_REQUIRE_LOWERCASE and not PASSWORD_POLICY_REGEXES["lower"].search(password):
+            raise BadRequestError("Password must contain at least one lowercase letter")
+        if settings.PASSWORD_REQUIRE_NUMBER and not PASSWORD_POLICY_REGEXES["digit"].search(password):
+            raise BadRequestError("Password must contain at least one number")
+        if settings.PASSWORD_REQUIRE_SPECIAL and not PASSWORD_POLICY_REGEXES["special"].search(password):
+            raise BadRequestError("Password must contain at least one special character")
     
     async def create_user(self, user_data: UserCreate) -> User:
         """Create a new user"""
@@ -35,7 +56,9 @@ class UserService:
                 raise BadRequestError("Email already registered")
             else:
                 raise BadRequestError("Username already taken")
-        
+
+        self._validate_password(user_data.password)
+
         # Create new user
         hashed_password = get_password_hash(user_data.password)
         user = User(
@@ -134,12 +157,18 @@ class UserService:
         return user
     
     async def create_access_token_for_user(self, user: User) -> str:
-        """Create JWT access token for user"""
-        token_data = {
+        """Deprecated: use create_tokens_for_user"""
+        tokens = await self.create_tokens_for_user(user)
+        return tokens["access_token"]
+
+    async def create_tokens_for_user(self, user: User) -> Dict[str, str]:
+        token_payload = {
             "sub": str(user.id),
             "email": user.email,
             "username": user.username,
-            "roles": ["user"] + (["admin"] if user.is_superuser else [])
+            "roles": ["user"] + (["admin"] if user.is_superuser else []),
         }
-        return create_access_token(token_data)
+        access_token = create_access_token(token_payload)
+        refresh_token = create_refresh_token(token_payload)
+        return {"access_token": access_token, "refresh_token": refresh_token}
 

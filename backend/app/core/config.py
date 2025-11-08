@@ -23,9 +23,22 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "your-secret-key-here"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    PASSWORD_MAX_LENGTH: int = 72
+    PASSWORD_REQUIRE_UPPERCASE: bool = True
+    PASSWORD_REQUIRE_LOWERCASE: bool = True
+    PASSWORD_REQUIRE_NUMBER: bool = True
+    PASSWORD_REQUIRE_SPECIAL: bool = True
+    SKIP_EXTERNAL_MARKET_DATA: bool = False
     
     # CORS
-    ALLOWED_HOSTS: Union[str, List[str]] = "http://localhost:3000,http://localhost:8000"
+    ALLOWED_HOSTS: Union[str, List[str]] = [
+        "http://localhost:3000",
+        "http://localhost:4000",
+        "http://localhost:8000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:4000",
+    ]
     
     @field_validator('ALLOWED_HOSTS', mode='before')
     @classmethod

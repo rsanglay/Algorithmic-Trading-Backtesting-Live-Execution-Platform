@@ -15,6 +15,7 @@ from sqlalchemy.ext.compiler import compiles
 
 from app.main import app
 from app.core.database import Base, get_db
+from app.core.config import settings
 from app.models.user import User
 from app.models.strategies import Strategy
 from tests.factories import BaseFactory, UserFactory, StrategyFactory
@@ -56,6 +57,14 @@ def configure_factory_session(db_session):
     BaseFactory._meta.sqlalchemy_session = db_session
     yield
     BaseFactory._meta.sqlalchemy_session = None
+
+
+@pytest.fixture(autouse=True)
+def disable_external_data_sources():
+    original = settings.SKIP_EXTERNAL_MARKET_DATA
+    settings.SKIP_EXTERNAL_MARKET_DATA = True
+    yield
+    settings.SKIP_EXTERNAL_MARKET_DATA = original
 
 
 @pytest.fixture(scope="function")

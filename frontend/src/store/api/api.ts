@@ -1,20 +1,54 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { createApi, fetchBaseQuery, FetchBaseQueryError } from '@reduxjs/toolkit/query/react';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
+const rawBaseQuery = fetchBaseQuery({
+  baseUrl: `${API_BASE_URL}/api/v1`,
+  prepareHeaders: (headers) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      headers.set('authorization', `Bearer ${token}`);
+    }
+    return headers;
+  },
+});
+
+const baseQueryWithRefresh: typeof rawBaseQuery = async (args, api, extraOptions) => {
+  let result = await rawBaseQuery(args, api, extraOptions);
+  if (result.error && (result.error as FetchBaseQueryError)?.status === 401) {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (refreshToken) {
+      const refreshResult = await rawBaseQuery(
+        {
+          url: '/auth/refresh',
+          method: 'POST',
+          body: { refresh_token: refreshToken },
+        },
+        api,
+        extraOptions
+      );
+
+      if (!refreshResult.error && refreshResult.data) {
+        const data: any = refreshResult.data;
+        localStorage.setItem('token', data.access_token);
+        localStorage.setItem('refreshToken', data.refresh_token);
+        if (data.user) {
+          localStorage.setItem('user', JSON.stringify(data.user));
+        }
+        result = await rawBaseQuery(args, api, extraOptions);
+      } else {
+        localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+      }
+    }
+  }
+  return result;
+};
+
 export const api = createApi({
   reducerPath: 'api',
-  baseQuery: fetchBaseQuery({
-    baseUrl: `${API_BASE_URL}/api/v1`,
-    prepareHeaders: (headers) => {
-      // Add authentication headers if needed
-      const token = localStorage.getItem('token');
-      if (token) {
-        headers.set('authorization', `Bearer ${token}`);
-      }
-      return headers;
-    },
-  }),
+  baseQuery: baseQueryWithRefresh,
   tagTypes: [
     'Strategy',
     'Backtest',
@@ -39,6 +73,13 @@ export const api = createApi({
         url: '/auth/login',
         method: 'POST',
         body: credentials,
+      }),
+    }),
+    refreshToken: builder.mutation({
+      query: (refreshToken: string) => ({
+        url: '/auth/refresh',
+        method: 'POST',
+        body: { refresh_token: refreshToken },
       }),
     }),
     getCurrentUser: builder.query({
@@ -410,6 +451,7 @@ export const {
   // Auth
   useRegisterMutation,
   useLoginMutation,
+  useRefreshTokenMutation,
   useGetCurrentUserQuery,
   useUpdateUserPreferencesMutation,
 

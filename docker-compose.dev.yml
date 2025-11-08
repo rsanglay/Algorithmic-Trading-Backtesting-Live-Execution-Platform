@@ -52,7 +52,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - SECRET_KEY=dev-secret-key-change-in-production
       - DEBUG=True
-      - ALLOWED_HOSTS=http://localhost:3000,http://localhost:8001
+      - ALLOWED_HOSTS=http://localhost:3000,http://localhost:4000,http://127.0.0.1:3000,http://127.0.0.1:4000,http://localhost:8001
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,6 +85,22 @@ services:
       - /app/node_modules
     stdin_open: true
     tty: true
+    networks:
+      - trading-platform-network
+    restart: unless-stopped
+
+  jupyter:
+    image: jupyter/scipy-notebook:2024-07-01
+    container_name: trading-platform-jupyter
+    ports:
+      - "8888:8888"
+    environment:
+      - JUPYTER_TOKEN=devtoken
+      - JUPYTER_ENABLE_LAB=yes
+    volumes:
+      - ./research/notebooks:/home/jovyan/work
+    depends_on:
+      - backend
     networks:
       - trading-platform-network
     restart: unless-stopped

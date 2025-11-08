@@ -4,15 +4,32 @@ Market data service for data ingestion and management
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 import yfinance as yf
 import pandas as pd
 import requests
 import json
+import time
 
 from app.models.market_data import MarketData, TickerInfo, NewsData
 from app.schemas.market_data import MarketDataCreate, TickerInfoCreate, NewsDataCreate
 from app.core.config import settings
+
+SUMMARY_CACHE: Dict[str, Dict[str, Any]] = {}
+SUMMARY_CACHE_TTL_SECONDS = 60
+REQUEST_COOLDOWN_SECONDS = 0.5
+_last_request_ts: Optional[float] = None
+
+
+def _respect_rate_limit():
+    global _last_request_ts
+    if _last_request_ts is None:
+        _last_request_ts = time.time()
+        return
+    elapsed = time.time() - _last_request_ts
+    if elapsed < REQUEST_COOLDOWN_SECONDS:
+        time.sleep(REQUEST_COOLDOWN_SECONDS - elapsed)
+    _last_request_ts = time.time()
 
 
 class MarketDataService:
@@ -187,87 +204,127 @@ class MarketDataService:
     
     async def get_realtime_data(self, symbol: str) -> Dict[str, Any]:
         """Get real-time market data for a symbol from Yahoo Finance"""
-        try:
-            ticker = yf.Ticker(symbol)
-            info = ticker.info
-            
-            # Get current price data
-            current_data = ticker.history(period="1d", interval="1m")
-            
-            if current_data.empty:
-                # Fallback to latest daily data
-                current_data = ticker.history(period="5d", interval="1d")
-            
-            if current_data.empty:
-                return {"error": f"No data available for symbol {symbol}"}
-            
-            latest = current_data.iloc[-1]
-            previous_close = info.get('previousClose', latest['Close'])
-            
-            current_price = latest['Close']
-            change = current_price - previous_close
-            change_percent = (change / previous_close * 100) if previous_close else 0
-            
-            return {
+        cache_entry = SUMMARY_CACHE.get(symbol)
+        if cache_entry and cache_entry.get("expires_at", 0) > time.time():
+            return cache_entry["data"]
+
+        if settings.SKIP_EXTERNAL_MARKET_DATA:
+            return cache_entry["data"] if cache_entry else {
                 "symbol": symbol,
-                "name": info.get('longName', symbol),
+                "price": 0.0,
+                "change": 0.0,
+                "change_percent": 0.0,
+                "volume": 0,
+                "timestamp": datetime.utcnow().isoformat(),
+                "note": "External market data disabled in configuration",
+            }
+
+        try:
+            _respect_rate_limit()
+            ticker = yf.Ticker(symbol)
+            fast_info = getattr(ticker, "fast_info", None)
+            if fast_info:
+                info = fast_info
+                current_price = info.get("last_price") or info.get("lastPrice")
+                previous_close = info.get("previous_close") or info.get("previousClose")
+                volume = info.get("last_volume") or info.get("lastVolume")
+                high = info.get("day_high") or info.get("dayHigh")
+                low = info.get("day_low") or info.get("dayLow")
+                open_price = info.get("open")
+            else:
+                info = ticker.info
+                current_data = ticker.history(period="1d", interval="1m")
+                if current_data.empty:
+                    current_data = ticker.history(period="5d", interval="1d")
+                if current_data.empty:
+                    raise ValueError(f"No data available for symbol {symbol}")
+                latest = current_data.iloc[-1]
+                current_price = float(latest["Close"])
+                previous_close = float(info.get("previousClose", latest["Close"]))
+                volume = int(latest.get("Volume", 0))
+                high = float(latest.get("High", current_price))
+                low = float(latest.get("Low", current_price))
+                open_price = float(latest.get("Open", current_price))
+
+            previous_close = previous_close or current_price
+            change = current_price - previous_close
+            change_percent = (change / previous_close * 100) if previous_close else 0.0
+
+            payload = {
+                "symbol": symbol,
+                "name": getattr(ticker, "ticker", symbol),
                 "price": float(current_price),
                 "previous_close": float(previous_close),
                 "change": float(change),
                 "change_percent": round(change_percent, 2),
-                "volume": int(latest['Volume']),
-                "high": float(latest['High']),
-                "low": float(latest['Low']),
-                "open": float(latest['Open']),
-                "market_cap": info.get('marketCap'),
-                "currency": info.get('currency', 'USD'),
-                "exchange": info.get('exchange', ''),
-                "sector": info.get('sector', ''),
-                "industry": info.get('industry', ''),
-                "timestamp": datetime.utcnow().isoformat()
+                "volume": int(volume or 0),
+                "high": float(high or current_price),
+                "low": float(low or current_price),
+                "open": float(open_price or current_price),
+                "currency": "USD",
+                "timestamp": datetime.utcnow().isoformat(),
             }
+
+            SUMMARY_CACHE[symbol] = {
+                "data": payload,
+                "expires_at": time.time() + SUMMARY_CACHE_TTL_SECONDS,
+            }
+            return payload
         except Exception as e:
+            if cache_entry:
+                return cache_entry["data"]
             return {"error": f"Error fetching data for {symbol}: {str(e)}"}
     
     async def fetch_yfinance_data_direct(
-        self, 
-        symbol: str, 
-        period: str = "1y", 
+        self,
+        symbol: str,
+        period: str = "1y",
         interval: str = "1d"
     ) -> Dict[str, Any]:
         """Fetch data directly from Yahoo Finance without storing in DB"""
+        if settings.SKIP_EXTERNAL_MARKET_DATA:
+            cached = SUMMARY_CACHE.get(symbol)
+            if cached:
+                return {"symbol": symbol, "data": []}
+            return {"symbol": symbol, "data": [], "note": "External market data disabled"}
+
         try:
+            _respect_rate_limit()
             ticker = yf.Ticker(symbol)
-            info = ticker.info
-            
-            # Get historical data
+            info = {}
+            try:
+                info = ticker.fast_info or {}
+            except Exception:
+                info = {}
+
             hist = ticker.history(period=period, interval=interval)
-            
+
             if hist.empty:
                 return {"error": f"No data available for symbol {symbol}"}
-            
-            # Convert to list of dictionaries
+
             data = []
             for idx, row in hist.iterrows():
                 data.append({
                     "timestamp": idx.isoformat(),
-                    "open": float(row['Open']),
-                    "high": float(row['High']),
-                    "low": float(row['Low']),
-                    "close": float(row['Close']),
-                    "volume": int(row['Volume'])
+                    "open": float(row.get("Open", row.get("open", 0.0))),
+                    "high": float(row.get("High", row.get("high", 0.0))),
+                    "low": float(row.get("Low", row.get("low", 0.0))),
+                    "close": float(row.get("Close", row.get("close", 0.0))),
+                    "volume": int(row.get("Volume", row.get("volume", 0))),
                 })
-            
+
             return {
                 "symbol": symbol,
-                "name": info.get('longName', symbol),
-                "exchange": info.get('exchange', ''),
-                "sector": info.get('sector', ''),
-                "industry": info.get('industry', ''),
-                "currency": info.get('currency', 'USD'),
+                "name": info.get("shortName") if isinstance(info, dict) else getattr(ticker, "ticker", symbol),
+                "exchange": info.get("exchange"),
+                "currency": info.get("currency", "USD"),
                 "data": data,
                 "count": len(data)
             }
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 429:
+                return {"error": "Rate limited by data provider. Please wait a moment and retry."}
+            return {"error": f"Error fetching data for {symbol}: {str(exc)}"}
         except Exception as e:
             return {"error": f"Error fetching data for {symbol}: {str(e)}"}
     
