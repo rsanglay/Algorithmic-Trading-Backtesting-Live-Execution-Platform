@@ -10,6 +10,7 @@ import pandas as pd
 import requests
 import json
 import time
+import io
 
 from app.models.market_data import MarketData, TickerInfo, NewsData
 from app.schemas.market_data import MarketDataCreate, TickerInfoCreate, NewsDataCreate
@@ -20,15 +21,21 @@ SUMMARY_CACHE_TTL_SECONDS = 60
 REQUEST_COOLDOWN_SECONDS = 0.5
 _last_request_ts: Optional[float] = None
 
+HISTORICAL_CACHE: Dict[str, Dict[str, Any]] = {}
+HISTORICAL_CACHE_TTL_SECONDS = 60 * 10
+
+YAHOO_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+}
 
 def _respect_rate_limit():
     global _last_request_ts
-    if _last_request_ts is None:
-        _last_request_ts = time.time()
-        return
-    elapsed = time.time() - _last_request_ts
-    if elapsed < REQUEST_COOLDOWN_SECONDS:
-        time.sleep(REQUEST_COOLDOWN_SECONDS - elapsed)
+    now = time.time()
+    if _last_request_ts is not None:
+        elapsed = now - _last_request_ts
+        if elapsed < REQUEST_COOLDOWN_SECONDS:
+            time.sleep(REQUEST_COOLDOWN_SECONDS - elapsed)
     _last_request_ts = time.time()
 
 
@@ -184,7 +191,7 @@ class MarketDataService:
             "outputsize": "full"
         }
         
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=10)
         data = response.json()
         
         if "Error Message" in data:
@@ -202,130 +209,199 @@ class MarketDataService:
         
         return df
     
+    async def _fetch_history(self, symbol: str, period: str, interval: str) -> pd.DataFrame:
+        cache_key = f"{symbol}:{period}:{interval}"
+        cached = HISTORICAL_CACHE.get(cache_key)
+        if cached and cached.get("expires_at", 0) > time.time():
+            return cached["data"].copy()
+
+        hist = pd.DataFrame()
+        try:
+            _respect_rate_limit()
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period=period, interval=interval, auto_adjust=False)
+        except Exception:
+            hist = pd.DataFrame()
+
+        if hist.empty:
+            try:
+                hist = self._download_via_chart(symbol, period, interval)
+            except Exception:
+                hist = self._download_via_stooq(symbol, interval)
+
+        hist = hist[['Open', 'High', 'Low', 'Close', 'Volume']].dropna()
+        HISTORICAL_CACHE[cache_key] = {"data": hist.copy(), "expires_at": time.time() + HISTORICAL_CACHE_TTL_SECONDS}
+        return hist
+
+    def _store_historical_data(self, symbol: str, hist: pd.DataFrame, source: str = "yfinance") -> None:
+        if hist.empty:
+            return
+        for idx, row in hist.iterrows():
+            timestamp = pd.to_datetime(idx).to_pydatetime()
+            existing = self.db.query(MarketData).filter(
+                MarketData.symbol == symbol,
+                MarketData.timestamp == timestamp
+            ).first()
+            if existing:
+                existing.open_price = float(row['Open'])
+                existing.high_price = float(row['High'])
+                existing.low_price = float(row['Low'])
+                existing.close_price = float(row['Close'])
+                existing.volume = float(row['Volume'])
+                existing.source = source
+            else:
+                self.db.add(MarketData(
+                    symbol=symbol,
+                    timestamp=timestamp,
+                    open_price=float(row['Open']),
+                    high_price=float(row['High']),
+                    low_price=float(row['Low']),
+                    close_price=float(row['Close']),
+                    volume=float(row['Volume']),
+                    source=source,
+                ))
+        self.db.commit()
+    
     async def get_realtime_data(self, symbol: str) -> Dict[str, Any]:
-        """Get real-time market data for a symbol from Yahoo Finance"""
+        """Get real-time market data for a symbol from historical quotes"""
         cache_entry = SUMMARY_CACHE.get(symbol)
         if cache_entry and cache_entry.get("expires_at", 0) > time.time():
             return cache_entry["data"]
 
         if settings.SKIP_EXTERNAL_MARKET_DATA:
-            return cache_entry["data"] if cache_entry else {
-                "symbol": symbol,
-                "price": 0.0,
-                "change": 0.0,
-                "change_percent": 0.0,
-                "volume": 0,
-                "timestamp": datetime.utcnow().isoformat(),
-                "note": "External market data disabled in configuration",
-            }
+            if cache_entry:
+                return cache_entry["data"]
+            stored = self.db.query(MarketData).filter(MarketData.symbol == symbol).order_by(MarketData.timestamp.desc()).first()
+            if stored:
+                return {
+                    "symbol": symbol,
+                    "price": stored.close_price,
+                    "change": 0.0,
+                    "change_percent": 0.0,
+                    "volume": stored.volume,
+                    "timestamp": stored.timestamp.isoformat(),
+                    "note": "External market data disabled; showing cached quote",
+                }
+            return {"error": f"No data available for symbol {symbol}"}
 
         try:
-            _respect_rate_limit()
-            ticker = yf.Ticker(symbol)
-            fast_info = getattr(ticker, "fast_info", None)
-            if fast_info:
-                info = fast_info
-                current_price = info.get("last_price") or info.get("lastPrice")
-                previous_close = info.get("previous_close") or info.get("previousClose")
-                volume = info.get("last_volume") or info.get("lastVolume")
-                high = info.get("day_high") or info.get("dayHigh")
-                low = info.get("day_low") or info.get("dayLow")
-                open_price = info.get("open")
-            else:
-                info = ticker.info
-                current_data = ticker.history(period="1d", interval="1m")
-                if current_data.empty:
-                    current_data = ticker.history(period="5d", interval="1d")
-                if current_data.empty:
-                    raise ValueError(f"No data available for symbol {symbol}")
-                latest = current_data.iloc[-1]
-                current_price = float(latest["Close"])
-                previous_close = float(info.get("previousClose", latest["Close"]))
-                volume = int(latest.get("Volume", 0))
-                high = float(latest.get("High", current_price))
-                low = float(latest.get("Low", current_price))
-                open_price = float(latest.get("Open", current_price))
-
-            previous_close = previous_close or current_price
+            hist = await self._fetch_history(symbol, period="5d", interval="1d")
+            latest = hist.iloc[-1]
+            previous = hist.iloc[-2] if len(hist) > 1 else latest
+            current_price = float(latest['Close'])
+            previous_close = float(previous['Close'])
             change = current_price - previous_close
             change_percent = (change / previous_close * 100) if previous_close else 0.0
-
             payload = {
                 "symbol": symbol,
-                "name": getattr(ticker, "ticker", symbol),
-                "price": float(current_price),
-                "previous_close": float(previous_close),
-                "change": float(change),
+                "price": current_price,
+                "previous_close": previous_close,
+                "change": change,
                 "change_percent": round(change_percent, 2),
-                "volume": int(volume or 0),
-                "high": float(high or current_price),
-                "low": float(low or current_price),
-                "open": float(open_price or current_price),
-                "currency": "USD",
+                "volume": float(latest['Volume']),
+                "high": float(latest['High']),
+                "low": float(latest['Low']),
+                "open": float(latest['Open']),
                 "timestamp": datetime.utcnow().isoformat(),
             }
-
-            SUMMARY_CACHE[symbol] = {
-                "data": payload,
-                "expires_at": time.time() + SUMMARY_CACHE_TTL_SECONDS,
-            }
+            SUMMARY_CACHE[symbol] = {"data": payload, "expires_at": time.time() + SUMMARY_CACHE_TTL_SECONDS}
             return payload
         except Exception as e:
             if cache_entry:
                 return cache_entry["data"]
+            stored = self.db.query(MarketData).filter(MarketData.symbol == symbol).order_by(MarketData.timestamp.desc()).first()
+            if stored:
+                return {
+                    "symbol": symbol,
+                    "price": stored.close_price,
+                    "previous_close": stored.close_price,
+                    "change": 0.0,
+                    "change_percent": 0.0,
+                    "volume": stored.volume,
+                    "high": stored.high_price,
+                    "low": stored.low_price,
+                    "open": stored.open_price,
+                    "timestamp": stored.timestamp.isoformat(),
+                    "note": "Returned cached data due to external provider error",
+                }
             return {"error": f"Error fetching data for {symbol}: {str(e)}"}
     
     async def fetch_yfinance_data_direct(
-        self,
-        symbol: str,
-        period: str = "1y",
+        self, 
+        symbol: str, 
+        period: str = "1y", 
         interval: str = "1d"
     ) -> Dict[str, Any]:
         """Fetch data directly from Yahoo Finance without storing in DB"""
         if settings.SKIP_EXTERNAL_MARKET_DATA:
-            cached = SUMMARY_CACHE.get(symbol)
-            if cached:
-                return {"symbol": symbol, "data": []}
-            return {"symbol": symbol, "data": [], "note": "External market data disabled"}
+            stored = self.db.query(MarketData).filter(MarketData.symbol == symbol).order_by(MarketData.timestamp.asc()).all()
+            if stored:
+                data = [
+                    {
+                        "timestamp": row.timestamp.isoformat(),
+                        "open": row.open_price,
+                        "high": row.high_price,
+                        "low": row.low_price,
+                        "close": row.close_price,
+                        "volume": row.volume,
+                    }
+                    for row in stored
+                ]
+                return {
+                    "symbol": symbol,
+                    "data": data,
+                    "count": len(data),
+                    "note": "External market data disabled; returning cached series",
+                }
+            return {"error": f"No cached data available for symbol {symbol}"}
 
         try:
-            _respect_rate_limit()
-            ticker = yf.Ticker(symbol)
-            info = {}
-            try:
-                info = ticker.fast_info or {}
-            except Exception:
-                info = {}
-
-            hist = ticker.history(period=period, interval=interval)
-
-            if hist.empty:
-                return {"error": f"No data available for symbol {symbol}"}
+            hist = await self._fetch_history(symbol, period=period, interval=interval)
+            self._store_historical_data(symbol, hist)
 
             data = []
             for idx, row in hist.iterrows():
                 data.append({
-                    "timestamp": idx.isoformat(),
-                    "open": float(row.get("Open", row.get("open", 0.0))),
-                    "high": float(row.get("High", row.get("high", 0.0))),
-                    "low": float(row.get("Low", row.get("low", 0.0))),
-                    "close": float(row.get("Close", row.get("close", 0.0))),
-                    "volume": int(row.get("Volume", row.get("volume", 0))),
+                    "timestamp": pd.to_datetime(idx).isoformat(),
+                    "open": float(row['Open']),
+                    "high": float(row['High']),
+                    "low": float(row['Low']),
+                    "close": float(row['Close']),
+                    "volume": float(row['Volume']),
                 })
 
             return {
                 "symbol": symbol,
-                "name": info.get("shortName") if isinstance(info, dict) else getattr(ticker, "ticker", symbol),
-                "exchange": info.get("exchange"),
-                "currency": info.get("currency", "USD"),
                 "data": data,
                 "count": len(data)
             }
         except requests.HTTPError as exc:
             if exc.response is not None and exc.response.status_code == 429:
-                return {"error": "Rate limited by data provider. Please wait a moment and retry."}
+                return {
+                    "error": "Rate limited by data provider. Please wait a few moments and retry.",
+                    "is_rate_limited": True,
+                }
             return {"error": f"Error fetching data for {symbol}: {str(exc)}"}
         except Exception as e:
+            stored = self.db.query(MarketData).filter(MarketData.symbol == symbol).order_by(MarketData.timestamp.asc()).all()
+            if stored:
+                data = [
+                    {
+                        "timestamp": row.timestamp.isoformat(),
+                        "open": row.open_price,
+                        "high": row.high_price,
+                        "low": row.low_price,
+                        "close": row.close_price,
+                        "volume": row.volume,
+                    }
+                    for row in stored
+                ]
+                return {
+                    "symbol": symbol,
+                    "data": data,
+                    "count": len(data),
+                    "note": "Returned cached data due to external provider error",
+                }
             return {"error": f"Error fetching data for {symbol}: {str(e)}"}
     
     async def search_instruments(self, query: str, category: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -384,3 +460,66 @@ class MarketDataService:
             if symbol in symbols:
                 return category
         return "stocks"
+
+    def _download_via_chart(self, symbol: str, period: str, interval: str) -> pd.DataFrame:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+        params = {
+            "range": period,
+            "interval": interval,
+            "includePrePost": "false",
+            "corsDomain": "finance.yahoo.com",
+        }
+        response = requests.get(url, params=params, headers=YAHOO_HEADERS, timeout=10)
+        response.raise_for_status()
+        payload = response.json()
+        result = payload.get("chart", {}).get("result")
+        if not result:
+            raise ValueError(f"No data available for symbol {symbol}")
+        result = result[0]
+        timestamps = result.get("timestamp")
+        if not timestamps:
+            raise ValueError(f"No timestamps returned for symbol {symbol}")
+        quote = result.get("indicators", {}).get("quote", [{}])[0]
+        open_vals = quote.get("open")
+        close_vals = quote.get("close")
+        high_vals = quote.get("high")
+        low_vals = quote.get("low")
+        volume_vals = quote.get("volume")
+        df = pd.DataFrame({
+            "Open": open_vals,
+            "High": high_vals,
+            "Low": low_vals,
+            "Close": close_vals,
+            "Volume": volume_vals,
+        }, index=pd.to_datetime(timestamps, unit='s'))
+        df = df.dropna()
+        return df
+
+    def _download_via_stooq(self, symbol: str, interval: str) -> pd.DataFrame:
+        interval_map = {
+            "1d": "d",
+            "1wk": "w",
+            "1mo": "m",
+        }
+        stooq_interval = interval_map.get(interval, "d")
+        stooq_symbol = symbol.lower()
+        if stooq_symbol.isalpha() and not stooq_symbol.endswith('.us'):
+            stooq_symbol = f"{stooq_symbol}.us"
+        url = f"https://stooq.com/q/{stooq_interval}/l/?s={stooq_symbol}"
+        response = requests.get(url, headers=YAHOO_HEADERS, timeout=10)
+        response.raise_for_status()
+        df = pd.read_csv(io.StringIO(response.text))
+        if df.empty:
+            raise ValueError(f"Stooq returned no data for {symbol}")
+        df.rename(columns=str.strip, inplace=True)
+        df['Date'] = pd.to_datetime(df['Date'])
+        df.set_index('Date', inplace=True)
+        df.sort_index(inplace=True)
+        df.rename(columns={
+            'Open': 'Open',
+            'High': 'High',
+            'Low': 'Low',
+            'Close': 'Close',
+            'Volume': 'Volume'
+        }, inplace=True)
+        return df[['Open', 'High', 'Low', 'Close', 'Volume']]

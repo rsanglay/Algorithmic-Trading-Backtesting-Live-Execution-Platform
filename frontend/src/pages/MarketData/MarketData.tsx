@@ -40,7 +40,26 @@ const MarketData: React.FC = () => {
     setSelectedInstrument(instrument);
   };
 
-  const marketData = yfinanceData?.data || [];
+  const rawSeries = yfinanceData?.data || [];
+  const toNumber = (value: any) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  };
+  const marketData = rawSeries.map((row: any, index: number) => {
+    const timestamp = row.timestamp || row.date || row.Date;
+    return {
+      id: `${selectedInstrument?.symbol || 'instrument'}-${timestamp || index}`,
+      symbol: selectedInstrument?.symbol || '',
+      timestamp: timestamp ? new Date(timestamp).toISOString() : new Date().toISOString(),
+      open_price: toNumber(row.open ?? row.Open ?? row.open_price),
+      high_price: toNumber(row.high ?? row.High ?? row.high_price),
+      low_price: toNumber(row.low ?? row.Low ?? row.low_price),
+      close_price: toNumber(row.close ?? row.Close ?? row.close_price),
+      volume: toNumber(row.volume ?? row.Volume ?? row.volume_price),
+      source: row.source || (yfinanceData?.note ? 'cache' : 'yfinance'),
+      created_at: new Date().toISOString(),
+    };
+  });
   const hasError = yfinanceData?.error || realtimeData?.error;
 
   if (isDataLoading && !yfinanceData && !hasError) {

@@ -18,6 +18,7 @@ import Login from './pages/Auth/Login';
 import Register from './pages/Auth/Register';
 import RiskManagement from './pages/RiskManagement/RiskManagement';
 import FactorAnalysis from './pages/FactorAnalysis/FactorAnalysis';
+import Landing from './pages/Landing/Landing';
 
 import './App.css';
 
@@ -39,25 +40,26 @@ function App() {
           <div className="App">
             <Routes>
               {/* Public routes */}
+              <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               
               {/* Protected routes */}
               <Route
-                path="/*"
+                path="/app/*"
                 element={
                   <ProtectedRoute>
                     <Layout>
                       <Routes>
-                        <Route path="/" element={<Dashboard />} />
-                        <Route path="/strategies" element={<Strategies />} />
-                        <Route path="/backtesting" element={<Backtesting />} />
-                        <Route path="/analytics" element={<Analytics />} />
-                        <Route path="/risk-management" element={<RiskManagement />} />
-                        <Route path="/factor-analysis" element={<FactorAnalysis />} />
-                        <Route path="/ml-models" element={<MLModels />} />
-                        <Route path="/market-data" element={<MarketData />} />
-                        <Route path="/settings" element={<Settings />} />
+                        <Route index element={<Dashboard />} />
+                        <Route path="strategies" element={<Strategies />} />
+                        <Route path="backtesting" element={<Backtesting />} />
+                        <Route path="analytics" element={<Analytics />} />
+                        <Route path="risk-management" element={<RiskManagement />} />
+                        <Route path="factor-analysis" element={<FactorAnalysis />} />
+                        <Route path="ml-models" element={<MLModels />} />
+                        <Route path="market-data" element={<MarketData />} />
+                        <Route path="settings" element={<Settings />} />
                       </Routes>
                     </Layout>
                   </ProtectedRoute>

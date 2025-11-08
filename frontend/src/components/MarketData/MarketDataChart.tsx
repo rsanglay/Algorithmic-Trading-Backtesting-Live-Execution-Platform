@@ -5,11 +5,11 @@ interface MarketData {
   id: string;
   symbol: string;
   timestamp: string;
-  open_price: number;
-  high_price: number;
-  low_price: number;
-  close_price: number;
-  volume: number;
+  open_price: number | null;
+  high_price: number | null;
+  low_price: number | null;
+  close_price: number | null;
+  volume: number | null;
   source: string;
   created_at: string;
 }
@@ -19,23 +19,25 @@ interface MarketDataChartProps {
 }
 
 const MarketDataChart: React.FC<MarketDataChartProps> = ({ data }) => {
-  if (data.length === 0) {
+  // Transform data for chart
+  const chartData = data
+    .filter(item => item.close_price !== null)
+    .map(item => ({
+      date: item.timestamp,
+      open: item.open_price,
+      high: item.high_price,
+      low: item.low_price,
+      close: item.close_price,
+      volume: item.volume,
+    }));
+
+  if (chartData.length === 0) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">No data available for chart</p>
       </div>
     );
   }
-
-  // Transform data for chart
-  const chartData = data.map(item => ({
-    date: item.timestamp,
-    open: item.open_price,
-    high: item.high_price,
-    low: item.low_price,
-    close: item.close_price,
-    volume: item.volume,
-  }));
 
   return (
     <div className="chart-container">

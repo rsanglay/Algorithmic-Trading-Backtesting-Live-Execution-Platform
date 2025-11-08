@@ -22,7 +22,7 @@ const Login: React.FC = () => {
       localStorage.setItem('user', JSON.stringify(result.user));
       
       toast.success('Login successful!');
-      navigate('/');
+      navigate('/app');
     } catch (error: any) {
       toast.error(error?.data?.detail || 'Login failed. Please check your credentials.');
     }
@@ -37,6 +37,12 @@ const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="absolute top-6 left-6">
+        <Link to="/" className="text-sm text-blue-600 hover:text-blue-500 flex items-center space-x-2">
+          <span aria-hidden>←</span>
+          <span>Back to landing page</span>
+        </Link>
+      </div>
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">

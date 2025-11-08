@@ -4,11 +4,11 @@ interface MarketData {
   id: string;
   symbol: string;
   timestamp: string;
-  open_price: number;
-  high_price: number;
-  low_price: number;
-  close_price: number;
-  volume: number;
+  open_price: number | null;
+  high_price: number | null;
+  low_price: number | null;
+  close_price: number | null;
+  volume: number | null;
   source: string;
   created_at: string;
 }
@@ -18,14 +18,16 @@ interface MarketDataTableProps {
 }
 
 const MarketDataTable: React.FC<MarketDataTableProps> = ({ data }) => {
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (value: number | null) => {
+    if (value === null) return '—';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
     }).format(value);
   };
 
-  const formatVolume = (value: number) => {
+  const formatVolume = (value: number | null) => {
+    if (value === null) return '—';
     return new Intl.NumberFormat('en-US', {
       notation: 'compact',
       maximumFractionDigits: 1,

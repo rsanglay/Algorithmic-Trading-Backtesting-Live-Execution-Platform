@@ -19,15 +19,15 @@ interface SidebarProps {
 }
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: HomeIcon },
-  { name: 'Strategies', href: '/strategies', icon: ChartBarIcon },
-  { name: 'Backtesting', href: '/backtesting', icon: BeakerIcon },
-  { name: 'Analytics', href: '/analytics', icon: ChartPieIcon },
-  { name: 'Risk Management', href: '/risk-management', icon: ShieldCheckIcon },
-  { name: 'Factor Analysis', href: '/factor-analysis', icon: CubeIcon },
-  { name: 'ML Models', href: '/ml-models', icon: CpuChipIcon },
-  { name: 'Market Data', href: '/market-data', icon: CircleStackIcon },
-  { name: 'Settings', href: '/settings', icon: CogIcon },
+  { name: 'Dashboard', href: '/app', icon: HomeIcon },
+  { name: 'Strategies', href: '/app/strategies', icon: ChartBarIcon },
+  { name: 'Backtesting', href: '/app/backtesting', icon: BeakerIcon },
+  { name: 'Analytics', href: '/app/analytics', icon: ChartPieIcon },
+  { name: 'Risk Management', href: '/app/risk-management', icon: ShieldCheckIcon },
+  { name: 'Factor Analysis', href: '/app/factor-analysis', icon: CubeIcon },
+  { name: 'ML Models', href: '/app/ml-models', icon: CpuChipIcon },
+  { name: 'Market Data', href: '/app/market-data', icon: CircleStackIcon },
+  { name: 'Settings', href: '/app/settings', icon: CogIcon },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
@@ -69,7 +69,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
         <nav className="mt-5 px-2 space-y-1">
           {navigation.map((item) => {
-            const isActive = location.pathname === item.href;
+            const isActive = location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.name}
